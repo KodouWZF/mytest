@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的应用平台</title>
+    <!-- 添加网站图标 -->
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <!-- 引入 CSS 文件 -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+    <header>
+        <h1>我的应用平台</h1>
+        <div class="menu-bar">
+            <div class="dropdown">
+                <button class="menu-button">文件(F)</button>
+                <div class="dropdown-content">
+                    <button id="show-add-form-button" type="button">
+                        <span class="menu-icon">➕</span>
+                        添加新程序
+                        <span class="shortcut">Ctrl+N</span>
+                    </button>
+                    <button id="show-delete-form-button" type="button">
+                        <span class="menu-icon">🗑️</span>
+                        批量删除程序
+                        <span class="shortcut">Ctrl+D</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <!-- 仅当程序列表不为空时显示此区域 -->
+        {% if programs %}
+        <section id="program-grid">
+            <div id="programs-container">
+                {% for program in programs %}
+                    <div class="program-item" data-program-name="{{ program.name }}">
+                        <img src="{{ url_for('static', filename=program.icon) }}" alt="{{ program.name }} 图标" class="program-icon">
+                        <span class="program-name">{{ program.name }}</span>
+                    </div>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
+
+        {# hr 分隔线可以根据需要保留或移除 #}
+
+        <!-- 添加新程序的区域，默认隐藏 -->
+        <section id="add-program" class="hidden"> {# 使用 hidden 类来隐藏 #}
+            <h2>添加新程序 (Python)</h2>
+            <form id="add-program-form">
+                <div>
+                    <label for="program-name">程序名称：</label>
+                    <input type="text" id="program-name" required>
+                </div>
+                <div>
+                    <label for="program-icon">程序图标：</label>
+                    <input type="file" id="program-icon" accept="image/*">
+                    <small class="form-hint">支持 PNG、JPG 格式，建议尺寸 48x48 像素</small>
+                </div>
+                <div>
+                    <label for="program-code">程序代码：</label>
+                    <textarea id="program-code" rows="10" required></textarea>
+                </div>
+                <div class="form-buttons">
+                    <button type="submit">添加程序</button>
+                    <button type="button" id="cancel-add-button">取消</button>
+                </div>
+            </form>
+            <div id="add-message" class="message"></div>
+        </section>
+
+        <!-- 批量删除程序的区域，默认隐藏 -->
+        <section id="delete-programs" class="hidden">
+            <h2>批量删除程序</h2>
+            <form id="delete-programs-form">
+                <div class="programs-list">
+                    {% for program in programs %}
+                    <div class="program-checkbox">
+                        <input type="checkbox" id="delete-{{ program.name }}" name="programs" value="{{ program.name }}">
+                        <label for="delete-{{ program.name }}">
+                            <img src="{{ url_for('static', filename=program.icon) }}" alt="{{ program.name }} 图标" class="program-icon-small">
+                            <span>{{ program.name }}</span>
+                        </label>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="form-buttons">
+                    <button type="submit" class="danger-button">删除选中的程序</button>
+                    <button type="button" id="cancel-delete-button">取消</button>
+                    <button type="button" id="select-all-button">全选</button>
+                    <button type="button" id="deselect-all-button">取消全选</button>
+                </div>
+            </form>
+            <div id="delete-message" class="message"></div>
+        </section>
+
+        <!-- 移除程序输出区域 -->
+        {#
+        <section id="program-output">
+            <h2>程序输出</h2>
+            <pre id="output-area">程序运行结果将显示在这里...</pre>
+        </section>
+        #}
+    </main>
+
+    <footer>
+        <p>安全提示：直接运行用户代码存在风险，请谨慎操作。</p>
+    </footer>
+
+    <!-- 引入 JavaScript 文件 -->
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html> 
