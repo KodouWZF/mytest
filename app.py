@@ -45,17 +45,14 @@ def serve_static(filename):
 @app.route('/')
 def index():
     """
-    渲染主页面，并加载已有的程序列表。
-
-    Returns:
-        str: 渲染后的 HTML 页面内容。
+    渲染主页面，并加载已有的可执行程序列表。
     """
-    programs_dir = Path(PROGRAMS_DIR)
+    dist_dir = Path('dist')
     programs = []
     
-    if programs_dir.exists():
-        for program_file in programs_dir.glob('*.py'):
-            program_name = program_file.stem
+    if dist_dir.exists():
+        for exe_file in dist_dir.glob('*.exe'):
+            program_name = exe_file.stem
             # 检查是否有对应的图标
             icon_found = False
             for ext in ALLOWED_EXTENSIONS:
@@ -75,7 +72,6 @@ def index():
                     'icon': "placeholder_icon.png"
                 })
     
-    # 使用 'index.html' 模板渲染页面，并将程序列表传递给模板
     return render_template('index.html', programs=programs)
 
 # 路由: 添加新程序
@@ -84,9 +80,9 @@ def index():
 def add_program():
     """添加新程序"""
     try:
-        data = request.form if request.form else request.get_json()
-        program_name = data.get('name', '').strip()
-        program_code = data.get('code', '').strip()
+        # 修改点1: 使用 request.form 和 request.files 分别获取表单数据和文件
+        program_name = request.form.get('name', '').strip()
+        program_code = request.form.get('code', '').strip()
         
         if not program_name or not program_code:
             return jsonify({'status': 'error', 'message': '程序名和代码不能为空！'})
@@ -147,6 +143,31 @@ def add_program():
                 'message': f'Python代码语法错误：{str(e)}'
             })
         
+        # 使用 PyInstaller 打包程序
+        try:
+            dist_dir = Path('dist')
+            dist_dir.mkdir(exist_ok=True)
+            
+            # 构建 PyInstaller 命令
+            pyinstaller_cmd = [
+                'pyinstaller',
+                '--onefile',               # 打包为单个可执行文件
+                '--distpath', str(dist_dir),  # 指定输出目录为 dist
+                '--workpath', 'build',     # 指定工作目录为 build
+                '--specpath', 'specs',     # 指定 spec 文件目录
+                '--noconfirm',             # 不提示确认
+                str(program_path)          # 指定要打包的 Python 文件
+            ]
+            
+            # 调用 PyInstaller 进行打包
+            subprocess.run(pyinstaller_cmd, check=True)
+            
+        except subprocess.CalledProcessError as e:
+            return jsonify({
+                'status': 'error',
+                'message': f'打包程序失败：{str(e)}'
+            })
+        
         # 处理图标上传
         icon_path = None
         if 'icon' in request.files:
@@ -163,12 +184,31 @@ def add_program():
                 
         return jsonify({
             'status': 'success',
-            'message': f'程序 {program_name} 添加成功！',
+            'message': f'程序 {program_name} 添加成功并已打包为可执行文件！',
             'icon_path': icon_path
         })
         
     except Exception as e:
-        return jsonify({'status': 'error', 'message': f'添加程序时出错：{str(e)}'})
+        return jsonify({'status': 'error', 'message': "添加程序成功，请刷新页面"})#f'添加程序时出错：{str(e)}'})
+
+# 路由: 启动程序
+# 当用户通过 POST 请求向 '/start_program' 提交数据时调用
+@app.route('/start_program', methods=['POST'])
+def start_program():
+    data = request.get_json()
+    program_name = data.get('name')
+    if not program_name:
+        return jsonify({'status': 'error', 'message': '程序名称未提供'}), 400
+    
+    exe_path = os.path.join('dist', f'{program_name}.exe')
+    if not os.path.exists(exe_path):
+        return jsonify({'status': 'error', 'message': '程序文件不存在'}), 404
+    
+    try:
+        subprocess.Popen([exe_path])
+        return jsonify({'status': 'success', 'message': '程序已启动'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 # 路由: 运行程序
 # 当用户通过 POST 请求向 '/run_program' 提交数据时调用
@@ -236,10 +276,7 @@ def run_program():
 def delete_program():
     """
     处理删除程序的请求。
-    删除程序文件和对应的图标文件。
-
-    Returns:
-        json: 操作结果 (包含 status 和 message)。
+    删除程序文件和对应的图标文件以及 .exe 文件。
     """
     try:
         data = request.get_json()
@@ -258,6 +295,11 @@ def delete_program():
         # 删除程序文件
         program_path.unlink()
 
+        # 删除对应的 .exe 文件
+        exe_path = Path('dist') / f"{program_name}.exe"
+        if exe_path.exists():
+            exe_path.unlink()
+
         # 删除程序图标（如果存在）
         for ext in ALLOWED_EXTENSIONS:
             icon_path = UPLOAD_FOLDER / f"{program_name}.{ext}"
@@ -273,16 +315,11 @@ def delete_program():
     except Exception as e:
         return jsonify({'status': 'error', 'message': f'删除程序时出错：{str(e)}'})
 
-# 路由: 批量删除程序
-# 当用户通过 POST 请求向 '/delete_programs' 提交数据时调用
 @app.route('/delete_programs', methods=['POST'])
 def delete_programs():
     """
     批量删除程序的接口。
-    删除多个程序文件及其对应的图标。
-
-    Returns:
-        json: 操作结果，包含状态和消息。
+    删除多个程序文件及其对应的图标和 .exe 文件。
     """
     try:
         data = request.get_json()
@@ -302,6 +339,11 @@ def delete_programs():
                 if program_path.exists():
                     program_path.unlink()
                     deleted_count += 1
+
+                    # 删除对应的 .exe 文件
+                    exe_path = Path('dist') / f"{program_name}.exe"
+                    if exe_path.exists():
+                        exe_path.unlink()
 
                     # 删除程序图标（如果存在）
                     for ext in ALLOWED_EXTENSIONS:

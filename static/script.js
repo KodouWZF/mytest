@@ -131,17 +131,15 @@ document.addEventListener('DOMContentLoaded', function() {
         e.stopPropagation();
     };
     
-    // ----- 程序运行功能 -----
-    
-    // 程序项点击处理
-    function handleProgramClick(event) {
-        console.log('程序项被点击', event.target);
+    // ----- 程序启动功能 -----
+    function handleProgramStart(event) {
+        console.log('启动程序按钮被点击', event.target);
         
         var programItem = event.target.closest('.program-item');
         if (!programItem) return;
         
         var programName = programItem.dataset.programName;
-        console.log('运行程序:', programName);
+        console.log('启动程序:', programName);
         
         if (programItem.getAttribute('data-processing') === 'true') {
             console.log('程序正在处理中');
@@ -151,8 +149,8 @@ document.addEventListener('DOMContentLoaded', function() {
         programItem.setAttribute('data-processing', 'true');
         programItem.style.opacity = '0.7';
         
-        // 发送请求运行程序
-        fetch('/run_program', {
+        // 发送请求启动程序
+        fetch('/start_program', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: programName })
@@ -166,18 +164,18 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         })
         .catch(function(error) {
-            console.error('运行程序出错:', error);
-            alert('运行程序出错: ' + error);
+            console.error('启动程序出错:', error);
+            alert('启动程序出错: ' + error);
         })
         .finally(function() {
             programItem.style.opacity = '1';
             programItem.removeAttribute('data-processing');
         });
     }
-    
+
     // 绑定程序点击事件
     if (programsContainer) {
-        programsContainer.addEventListener('click', handleProgramClick);
+        programsContainer.addEventListener('click', handleProgramStart);
     }
     
     // ----- 添加程序功能 -----
@@ -334,7 +332,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             container = document.createElement('div');
             container.id = 'programs-container';
-            container.addEventListener('click', handleProgramClick);
+            container.addEventListener('click', handleProgramStart);
             
             gridSection.appendChild(container);
             
