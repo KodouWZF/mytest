@@ -1,0 +1,7 @@
+{
+    "name": "snake_game",
+    "language": "python",
+    "source_file": "snake_game\\source.py",
+    "exe_path": "snake_game\\snake_game.exe",
+    "icon": "program_icons/f943270c-fe66-4a12-9337-9bf41245e73a.png"
+}

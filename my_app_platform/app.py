@@ -2,7 +2,7 @@ import os
 import subprocess
 import sys
 import ctypes
-from flask import Flask, render_template, request, jsonify, send_from_directory
+from flask import Flask, render_template, request, jsonify, send_from_directory, current_app
 from flask_cors import CORS  # 添加CORS支持
 from pathlib import Path
 import shutil
@@ -511,9 +511,9 @@ def delete_programs():
         if not program_names:
             return jsonify({'status': 'error', 'message': '未选择要删除的程序'})
 
-        programs_dir = Path(PROGRAMS_DIR)
-        exe_dir = Path(EXE_DIR)
-        static_icons_dir = Path('static/program_icons')
+        # 确保使用绝对路径
+        programs_dir = Path(PROGRAMS_DIR).resolve()
+        exe_dir = Path(EXE_DIR).resolve()
 
         success_count = 0
         errors = []
@@ -522,90 +522,71 @@ def delete_programs():
             program_dir = programs_dir / program_name
             program_exe_dir = exe_dir / program_name
             icon_path = None
-            deleted_source = False
-            deleted_exe = False
-            deleted_icon = False
+            error_messages = []
 
-            # First, try to read info.json to get the icon path
+            # 获取图标路径
             info_file = program_dir / 'info.json'
             if info_file.exists():
                 try:
                     with open(info_file, 'r', encoding='utf-8') as f:
                         program_info = json.load(f)
-                        icon_relative_path = program_info.get('icon')
-                        if icon_relative_path and icon_relative_path != 'placeholder_icon.png':
-                            # Construct absolute path from static/program_icons/uuid.ext
-                            icon_path = Path('static') / icon_relative_path
+                        icon_relative = program_info.get('icon', '')
+                        if icon_relative and icon_relative != 'placeholder_icon.png':
+                            # 构造静态文件绝对路径
+                            icon_path = Path(current_app.static_folder) / icon_relative
                 except Exception as e:
-                     print(f"Error reading info.json for icon path in {program_name}: {e}")
+                    error_messages.append(f"读取图标信息失败: {str(e)}")
 
+            # 删除源代码目录
             try:
-                # Delete source directory
-                if program_dir.exists():
-                    print(f"Attempting to delete source directory: {program_dir}")
-                    shutil.rmtree(program_dir)
-                    deleted_source = True
-                    print(f"Successfully deleted source directory: {program_dir}")
-                else:
-                    print(f"Source directory does not exist, skipping: {program_dir}")
-                    deleted_source = True # Treat as success if not found
-
-                # Delete EXE directory
-                if program_exe_dir.exists():
-                    print(f"Attempting to delete EXE directory: {program_exe_dir}")
-                    shutil.rmtree(program_exe_dir)
-                    deleted_exe = True
-                    print(f"Successfully deleted EXE directory: {program_exe_dir}")
-                else:
-                    print(f"EXE directory does not exist, skipping: {program_exe_dir}")
-                    deleted_exe = True # Treat as success if not found
-
-                # Delete icon file (if found and not placeholder)
-                if icon_path and icon_path.exists():
-                     print(f"Attempting to delete icon file: {icon_path}")
-                     icon_path.unlink()
-                     deleted_icon = True
-                     print(f"Successfully deleted icon file: {icon_path}")
-                elif icon_path:
-                     print(f"Icon file path recorded but not found, skipping: {icon_path}")
-                     deleted_icon = True # Treat as success if not found
-                else:
-                    print(f"No specific icon recorded or using placeholder for {program_name}, skipping icon delete.")
-                    deleted_icon = True # Treat as success
-
-                if deleted_source and deleted_exe and deleted_icon:
-                    success_count += 1
-
+                shutil.rmtree(program_dir)
+                print(f"已删除源代码目录: {program_dir}")
+            except FileNotFoundError:
+                print(f"源代码目录不存在: {program_dir}")
             except Exception as e:
-                import traceback
-                error_details = traceback.format_exc()
-                # Be more specific about what failed if possible
-                failed_component = "未知组件"
-                if not deleted_source: failed_component = "源代码目录"
-                elif not deleted_exe: failed_component = "EXE目录"
-                elif not deleted_icon: failed_component = "图标文件"
+                error_messages.append(f"删除源代码失败: {str(e)}")
 
-                error_msg = f'删除程序 "{program_name}" ({failed_component}) 失败：{str(e)}'
-                print(f"Delete Error: {error_msg}")
-                print(f"Details: {error_details}")
-                errors.append(error_msg)
+            # 删除EXE目录
+            try:
+                shutil.rmtree(program_exe_dir)
+                print(f"已删除EXE目录: {program_exe_dir}")
+            except FileNotFoundError:
+                print(f"EXE目录不存在: {program_exe_dir}")
+            except Exception as e:
+                error_messages.append(f"删除EXE文件失败: {str(e)}")
 
+            # 删除图标文件
+            if icon_path:
+                try:
+                    icon_path.unlink()
+                    print(f"已删除图标: {icon_path}")
+                except FileNotFoundError:
+                    print(f"图标文件不存在: {icon_path}")
+                except Exception as e:
+                    error_messages.append(f"删除图标失败: {str(e)}")
+
+            # 统计结果
+            if not error_messages:
+                success_count += 1
+            else:
+                errors.append(f"程序 '{program_name}': {', '.join(error_messages)}")
+
+        # 构造响应
         if success_count == len(program_names):
             return jsonify({'status': 'success', 'message': f'成功删除 {success_count} 个程序'})
         elif success_count > 0:
-            error_msg = '，'.join(errors)
-            return jsonify({'status': 'partial', 'message': f'部分删除成功：{success_count}/{len(program_names)}。错误：{error_msg}'})
+            return jsonify({
+                'status': 'partial',
+                'message': f'部分成功（{success_count}/{len(program_names)}）',
+                'errors': errors
+            })
         else:
-            error_msg = '，'.join(errors)
-            return jsonify({'status': 'error', 'message': f'删除失败：{error_msg}'})
+            return jsonify({'status': 'error', 'message': '删除失败', 'errors': errors})
 
     except Exception as e:
         import traceback
-        error_details = traceback.format_exc()
-        print(f"批量删除程序时发生意外错误: {e}")
-        print(f"Details: {error_details}")
-        return jsonify({'status': 'error', 'message': f'删除程序出错：{str(e)}'})
-
+        traceback.print_exc()
+        return jsonify({'status': 'error', 'message': f'服务器错误: {str(e)}'})
 
 # 清理所有程序（包括旧格式和空目录）
 @app.route('/clean_all_programs', methods=['POST'])
